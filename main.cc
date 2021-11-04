@@ -8,33 +8,75 @@
 #include <sys/ioctl.h>
 #include <net/if.h>
 #include <string.h>
+#include <poll.h>
 using namespace std;
-const int LEN=2048;
+const int LEN=16384;
 unsigned char buffer[LEN];
 struct ifreq netdevice;
+void print_hex(unsigned char *data, int len) {
+  cout << hex << setfill('0');
+  cout << setw(3) << dec << 0 << hex << "  ";
+  for (int i=0;i<len;++i) {
+    cout << setw(2) << (int) buffer[i];
+    if ((i+1)%16==0) { 
+      cout << endl;
+      cout << setw(3) << dec << i/16 << hex << "  ";
+      }
+    else cout << " ";
+    }
+  cout << dec << setfill(' ') << endl;
+  cout << "--" << endl;
+}
 int main(int argc , char * argv[]) try {
-  int ret;
-  if (argc<2) throw "argument is missing";
-  strncpy(netdevice.ifr_name,argv[1],IFNAMSIZ);
-  int fd1=socket(AF_PACKET,SOCK_RAW,htons(ETH_P_ALL));
+  int ret,fd[2];
+  if (argc<3) throw "arguments are missing";
+  for (int k=0;k<2;++k) {
+// open sockets
+  fd[k]=socket(AF_PACKET,SOCK_RAW,htons(ETH_P_ALL));
   perror("socket");
-  if (fd1<0) throw "Dupa 1";
-  ret=ioctl(fd1,SIOCGIFINDEX,&netdevice);
+  if (fd[k]<0) throw "Dupa 1a";
+
+// assign specific interfaces
+  strncpy(netdevice.ifr_name,argv[k+1],IFNAMSIZ);
+  ret=ioctl(fd[k],SIOCGIFINDEX,&netdevice);
   perror("ioctl");
   if (ret<0) throw "Dupa 3";
   sockaddr_ll sckbind;
   sckbind.sll_family=AF_PACKET;
   sckbind.sll_protocol=0;
   sckbind.sll_ifindex=netdevice.ifr_ifindex;
-  int bret=bind(fd1,reinterpret_cast<sockaddr*>(&sckbind),sizeof(sckbind));
-  ssize_t x=recv(fd1,buffer,LEN,0);
-  if (x<0) throw "Dupa 2";
-  for (int i=0;i<x;++i) {
-    cout << hex << setw(2) << setfill('0') << (int) buffer[i];
-    if ((i+1)%16==0) cout << endl;
-    else cout << " ";
+  ret=bind(fd[k],reinterpret_cast<sockaddr*>(&sckbind),sizeof(sckbind));
+  if (ret<0) throw "Dupa 4";
+  }
+
+// setup polling
+  struct pollfd polfd[2];
+  for (int i=0;i<2;++i) {
+    polfd[i].fd=fd[i];
+    polfd[i].events=POLLIN;
+    polfd[i].revents=0;
     }
-  cout << dec << endl;
+  for (;;) {
+    ret=poll(polfd,2,-1);
+    if (ret<0) throw "Dupa 5";
+//  receive and print packet
+    ssize_t x;
+    for (int i=0;i<2;++i) {
+      if (polfd[i].revents==POLLIN) {
+        x=recv(fd[i],buffer,LEN,0);
+        print_hex(buffer,x);
+        if (x<0) {
+          perror("recv");
+          throw "Dupa 2";
+          }
+        x=send(fd[i!=1],buffer,x,0);
+        if (x<0) {
+          perror("send");
+          throw "Dupa s";
+          }
+        }
+      }
+    }
   } catch (const char * x) {
   cout << "Error catched: \"" << x << "\"" <<  endl;
   }
