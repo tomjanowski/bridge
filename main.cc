@@ -22,11 +22,34 @@ void print_hex(unsigned char *data, int len) {
       cout << endl;
       cout << setw(3) << dec << i/16 << hex << "  ";
       }
+    else if ((i+1)%8==0) cout << " | ";
     else cout << " ";
     }
   cout << dec << setfill(' ') << endl;
   cout << "--" << endl;
 }
+bool checksum(unsigned char *etherpacket, size_t length, uint16_t *chk_found, uint16_t *chk_calc) {
+  bool test=true;
+//ios_base::fmtflags fl=cout.flags();
+  if (*reinterpret_cast<uint16_t*>(etherpacket+12)!=8) test=false;
+  if ((*(etherpacket+14)&0xf0)!=0x40) test=false;
+  int size=(*(etherpacket+14)&0x0f)*2;
+  unsigned int chksum=0;
+  for (int i=0;i<size;++i) {
+    uint16_t item=ntohs(*reinterpret_cast<uint16_t*>(etherpacket+14+i*2));
+    if (i==5) { // skip checksum
+      *chk_found=item;
+      continue;
+      }
+    chksum+=item;
+    chksum+=(chksum>>16);
+    chksum=chksum&0x0000ffff;
+    }
+  chksum=chksum^0x0000ffff;
+//cout.flags(fl);
+  *chk_calc=chksum;
+  return test;
+  }
 int main(int argc , char * argv[]) try {
   int ret,fd[2];
   if (argc<3) throw "arguments are missing";
@@ -60,6 +83,7 @@ int main(int argc , char * argv[]) try {
     polfd[i].revents=0;
     }
   socklen_t socklen;
+  uint16_t checksum_found, checksum_calculated;
   for (;;) {
     ret=poll(polfd,2,-1);
     if (ret<0) throw "Dupa 5";
@@ -75,6 +99,7 @@ int main(int argc , char * argv[]) try {
         if (sckbind.sll_pkttype==PACKET_OUTGOING) continue;
 //      cout << "From " << argv[i+1] << endl;
 //      print_hex(buffer,x);
+//      if (checksum(buffer,x,&checksum_found,&checksum_calculated)) cout << hex << checksum_found << " " << checksum_calculated << endl;
         x=send(fd[i!=1],buffer,x,0);
         if (x<0) {
           perror("send");
