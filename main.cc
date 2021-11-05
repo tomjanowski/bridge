@@ -30,24 +30,27 @@ void print_hex(unsigned char *data, int len) {
 int main(int argc , char * argv[]) try {
   int ret,fd[2];
   if (argc<3) throw "arguments are missing";
+  sockaddr_ll sckbind;
+
+// LOOP:
+
   for (int k=0;k<2;++k) {
-// open sockets
-  fd[k]=socket(AF_PACKET,SOCK_RAW,htons(ETH_P_ALL));
-  perror("socket");
-  if (fd[k]<0) throw "Dupa 1a";
+//  open sockets
+    fd[k]=socket(AF_PACKET,SOCK_RAW,htons(ETH_P_ALL));
+    perror("socket");
+    if (fd[k]<0) throw "Dupa 1a";
 
 // assign specific interfaces
-  strncpy(netdevice.ifr_name,argv[k+1],IFNAMSIZ);
-  ret=ioctl(fd[k],SIOCGIFINDEX,&netdevice);
-  perror("ioctl");
-  if (ret<0) throw "Dupa 3";
-  sockaddr_ll sckbind;
-  sckbind.sll_family=AF_PACKET;
-  sckbind.sll_protocol=0;
-  sckbind.sll_ifindex=netdevice.ifr_ifindex;
-  ret=bind(fd[k],reinterpret_cast<sockaddr*>(&sckbind),sizeof(sckbind));
-  if (ret<0) throw "Dupa 4";
-  }
+    strncpy(netdevice.ifr_name,argv[k+1],IFNAMSIZ);
+    ret=ioctl(fd[k],SIOCGIFINDEX,&netdevice);
+    perror("ioctl");
+    if (ret<0) throw "Dupa 3";
+    sckbind.sll_family=AF_PACKET;
+    sckbind.sll_protocol=0;
+    sckbind.sll_ifindex=netdevice.ifr_ifindex;
+    ret=bind(fd[k],reinterpret_cast<sockaddr*>(&sckbind),sizeof(sckbind));
+    if (ret<0) throw "Dupa 4";
+    }
 
 // setup polling
   struct pollfd polfd[2];
@@ -56,6 +59,7 @@ int main(int argc , char * argv[]) try {
     polfd[i].events=POLLIN;
     polfd[i].revents=0;
     }
+  socklen_t socklen;
   for (;;) {
     ret=poll(polfd,2,-1);
     if (ret<0) throw "Dupa 5";
@@ -63,15 +67,19 @@ int main(int argc , char * argv[]) try {
     ssize_t x;
     for (int i=0;i<2;++i) {
       if (polfd[i].revents==POLLIN) {
-        x=recv(fd[i],buffer,LEN,0);
-        print_hex(buffer,x);
+        x=recvfrom(fd[i],buffer,LEN,0,reinterpret_cast<sockaddr*>(&sckbind),&socklen);
         if (x<0) {
           perror("recv");
           throw "Dupa 2";
           }
+        if (sckbind.sll_pkttype==PACKET_OUTGOING) continue;
+//      cout << "From " << argv[i+1] << endl;
+//      print_hex(buffer,x);
         x=send(fd[i!=1],buffer,x,0);
         if (x<0) {
           perror("send");
+          cout << "From " << argv[i+1] << endl;
+          print_hex(buffer,x);
           throw "Dupa s";
           }
         }
