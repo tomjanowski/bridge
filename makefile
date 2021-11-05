@@ -1,2 +1,5 @@
 bridge: main.o
-	g++ -o $@ $<
+	g++ -O2 -o $@ $<
+
+%.o: %.cc
+	g++ -O2 -c $<
