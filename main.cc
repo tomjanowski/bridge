@@ -14,7 +14,6 @@
 using namespace std;
 const int LEN=16384;
 //unsigned char buffer[LEN];
-struct ifreq netdevice;
 void print_hex(unsigned char *data, int len) {
   cout << hex << setfill('0');
   cout << setw(3) << dec << 0 << hex << "  ";
@@ -95,6 +94,7 @@ int main(int argc , char * argv[]) try {
 
 // LOOP:
 
+  struct ifreq netdevice;
   for (int k=0;k<2;++k) {
 //  open sockets
     fd[k]=socket(AF_PACKET,SOCK_RAW,htons(ETH_P_ALL));
@@ -109,6 +109,20 @@ int main(int argc , char * argv[]) try {
     sckbind.sll_family=AF_PACKET;
     sckbind.sll_protocol=0;
     sckbind.sll_ifindex=netdevice.ifr_ifindex;
+    long mem=16777216;
+    socklen_t lmem=sizeof(mem);
+    ret=setsockopt(fd[k],SOL_SOCKET,SO_RCVBUFFORCE,&mem,lmem);
+    if (ret<0) {
+      perror("setsockopt");
+      throw "Dupa 8";
+      }
+    mem=0;
+    ret=getsockopt(fd[k],SOL_SOCKET,SO_RCVBUF,&mem,&lmem);
+    if (ret<0) {
+      perror("getsockopt");
+      throw "Dupa 9";
+      }
+    cout << "Socket buffer: " << mem << " " << lmem << endl;
     ret=bind(fd[k],reinterpret_cast<sockaddr*>(&sckbind),sizeof(sckbind));
     if (ret<0) throw "Dupa 4";
     }
