@@ -76,6 +76,10 @@ void * thread_forwarder(void * y) {
 //  cout << "From " << argv[source+1] << endl;
 //  print_hex(buffer,x);
 //  if (checksum(buffer,x,&checksum_found,&checksum_calculated)) cout << hex << checksum_found << " " << checksum_calculated << endl;
+    if (x>1514) { // 1500 + MAC + MAC + ethtype
+      cout << x << endl;
+      throw "Packet bigger than 1500 bytes";
+      }
     x=send(fds[source!=1],buffer,x,0);
     if (x<0) {
       perror("send");
