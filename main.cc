@@ -17,43 +17,9 @@
 using namespace std;
 const int LEN=16384;
 //unsigned char buffer[LEN];
-void print_hex(unsigned char *data, int len) {
-  cout << hex << setfill('0');
-  cout << setw(3) << dec << 0 << hex << "  ";
-  for (int i=0;i<len;++i) {
-    cout << setw(2) << (int) data[i];
-    if ((i+1)%16==0) { 
-      cout << endl;
-      cout << setw(3) << dec << i/16 << hex << "  ";
-      }
-    else if ((i+1)%8==0) cout << " | ";
-    else cout << " ";
-    }
-  cout << dec << setfill(' ') << endl;
-  cout << "--" << endl;
-}
-bool checksum(unsigned char *etherpacket, size_t length, uint16_t *chk_found, uint16_t *chk_calc) {
-  bool test=true;
-//ios_base::fmtflags fl=cout.flags();
-  if (*reinterpret_cast<uint16_t*>(etherpacket+12)!=8) test=false;
-  if ((*(etherpacket+14)&0xf0)!=0x40) test=false;
-  int size=(*(etherpacket+14)&0x0f)*2;
-  unsigned int chksum=0;
-  for (int i=0;i<size;++i) {
-    uint16_t item=ntohs(*reinterpret_cast<uint16_t*>(etherpacket+14+i*2));
-    if (i==5) { // skip checksum
-      *chk_found=item;
-      continue;
-      }
-    chksum+=item;
-    chksum+=(chksum>>16);
-    chksum=chksum&0x0000ffff;
-    }
-  chksum=chksum^0x0000ffff;
-//cout.flags(fl);
-  *chk_calc=chksum;
-  return test;
-  }
+void print_hex(unsigned char *data, int len);
+bool checksum(unsigned char *etherpacket, size_t length, uint16_t *chk_found, uint16_t *chk_calc);
+void * thread_forwarder(void * y);
 struct thread_data {
 int *fds;
 int source;
@@ -63,101 +29,6 @@ unsigned char ** mmaps_tx;
 unsigned int mmap_size_rx;
 unsigned int mmap_size_tx;
 };
-void * thread_forwarder(void * y) {
-  sockaddr_ll sckbind;
-  socklen_t socklen;
-  ssize_t x;
-  unsigned long immediate=0,delayed=0;
-  unsigned char buffer[LEN];
-  int *fds=reinterpret_cast<thread_data*>(y)->fds;
-  int source=reinterpret_cast<thread_data*>(y)->source;
-  char **argv=reinterpret_cast<thread_data*>(y)->argv;
-  unsigned char **mmaps_rx=reinterpret_cast<thread_data*>(y)->mmaps_rx;
-  unsigned char **mmaps_tx=reinterpret_cast<thread_data*>(y)->mmaps_tx;
-  unsigned int size_rx=reinterpret_cast<thread_data*>(y)->mmap_size_rx;
-  unsigned int size_tx=reinterpret_cast<thread_data*>(y)->mmap_size_tx;
-  unsigned int max_fr_rx=size_rx/2048;
-  unsigned int max_fr_tx=size_tx/2048;
-  cout << "source " << source << endl;
-//if (source) sleep(360000);
-  pollfd pl;
-  pl.fd=fds[source];
-  pl.events=POLLIN|POLLRDNORM|POLLERR;
-  int offset=TPACKET_ALIGN(sizeof(tpacket2_hdr));
-//  receive and print packet
-  unsigned int circ_rx=0;
-  unsigned int circ_tx=0;
-  sockaddr_ll *addr;
-  bool oneframe=true;
-  bool sent=false;
-  for (;;) {
-    if (!oneframe) cout << "Did not get any frame" << endl;
-    pl.revents=0;
-    poll(&pl,1,-1);
-    oneframe=false;
-//  cout << "Have poll" << endl;
-    for (;;circ_rx=(circ_rx+1)%max_fr_rx,circ_tx=(circ_tx+1)%max_fr_tx) {
-      unsigned char *frame=mmaps_rx[source]+circ_rx*2048;
-      tpacket2_hdr *hdr=reinterpret_cast<tpacket2_hdr*>(frame);
-      if ((hdr->tp_status&TP_STATUS_USER)==TP_STATUS_USER) {
-        oneframe=true;
-//      if (hdr->tp_status&TP_STATUS_LOSING==TP_STATUS_LOSING) cout << "Losing packets" << endl;
-//      cout << "Have packet " << circ_rx << endl;
-//      cout << "From " << argv[source+1] << endl;
-//      print_hex(frame+hdr->tp_mac,hdr->tp_snaplen);
-        if (hdr->tp_snaplen!=hdr->tp_len) throw "truncation?";
-        addr=reinterpret_cast<sockaddr_ll*>(frame+TPACKET_ALIGN(sizeof(tpacket2_hdr)));
-        if (hdr->tp_snaplen>1514) { // 1500 + MAC + MAC + ethtype
-          cout << hdr->tp_snaplen << endl;
-          throw "Packet bigger than 1500 bytes";
-          }
-        if (addr->sll_pkttype==PACKET_OUTGOING) {
-          hdr->tp_status=TP_STATUS_KERNEL;
-          continue;
-          }
-        unsigned char *dst_frame=mmaps_tx[source!=1]+circ_tx*2048;
-        tpacket2_hdr *dst_hdr=reinterpret_cast<tpacket2_hdr*>(dst_frame);
-        if ((dst_hdr->tp_status&TP_STATUS_SEND_REQUEST)!=TP_STATUS_AVAILABLE) {
-          cout << circ_tx << " " << hex << dst_hdr->tp_status << dec << endl;
-          throw "Dupa 15";
-          }
-        dst_hdr->tp_len=hdr->tp_len;
-        memcpy(dst_frame+offset,frame+hdr->tp_mac,hdr->tp_len);
-        dst_hdr->tp_status=TP_STATUS_SEND_REQUEST;
-        hdr->tp_status=TP_STATUS_KERNEL;
-        sent=false;
-        if ((circ_rx+1)%128==0) {
-          ++delayed;
-          x=send(fds[source!=1],NULL,0,0);
-          sent=true;
-          if (x<0) {
-            perror("send");
-            cout << "From " << argv[source+1] << endl;
-            print_hex(buffer,x);
-            throw "Dupa s";
-            }
-          }
-        }
-      else {
-        if (oneframe and not sent) {
-          ++immediate;
-          x=send(fds[source!=1],NULL,0,0);
-          sent=true;
-//        cout << immediate << " " << delayed << "             \r" << flush;
-          if (x<0) {
-            perror("send");
-            cout << "From " << argv[source+1] << endl;
-            print_hex(buffer,x);
-            throw "Dupa s";
-            }
-          }
-        break;
-        }
-      }
-    }
-  return 0;
-  }
-
 //  ************************** MAIN ****************************
 
 int main(int argc , char * argv[]) try {
@@ -169,12 +40,12 @@ int main(int argc , char * argv[]) try {
   sockaddr_ll sckbind;
   tpacket_req ring_parameters_rx={};
   tpacket_req ring_parameters_tx={};
-  ring_parameters_rx.tp_block_size=PAGE_SIZE*1024*1;
-  ring_parameters_rx.tp_block_nr=256;
+  ring_parameters_rx.tp_block_size=PAGE_SIZE/2*(1024*256);
+  ring_parameters_rx.tp_block_nr=2;
   ring_parameters_rx.tp_frame_size=2048;
   ring_parameters_rx.tp_frame_nr=ring_parameters_rx.tp_block_size/ring_parameters_rx.tp_frame_size*ring_parameters_rx.tp_block_nr;
-  ring_parameters_tx.tp_block_size=PAGE_SIZE*1024*1;
-  ring_parameters_tx.tp_block_nr=2;
+  ring_parameters_tx.tp_block_size=PAGE_SIZE/2*1024*8;
+  ring_parameters_tx.tp_block_nr=1;
   ring_parameters_tx.tp_frame_size=2048;
   ring_parameters_tx.tp_frame_nr=ring_parameters_tx.tp_block_size/ring_parameters_tx.tp_frame_size*ring_parameters_tx.tp_block_nr;
 
@@ -272,3 +143,184 @@ struct thread_data thr_dat[2];
   } catch (const char * x) {
   cout << "Error catched: \"" << x << "\"" <<  endl;
   }
+
+//  **************** THREAD FORWARDER *********************************
+
+
+void * thread_forwarder(void * y) {
+  sockaddr_ll sckbind;
+  socklen_t socklen;
+  ssize_t x;
+  unsigned long immediate=0,delayed=0;
+  unsigned char buffer[LEN];
+  int *fds=reinterpret_cast<thread_data*>(y)->fds;
+  int source=reinterpret_cast<thread_data*>(y)->source;
+  char **argv=reinterpret_cast<thread_data*>(y)->argv;
+  unsigned char **mmaps_rx=reinterpret_cast<thread_data*>(y)->mmaps_rx;
+  unsigned char **mmaps_tx=reinterpret_cast<thread_data*>(y)->mmaps_tx;
+  unsigned int size_rx=reinterpret_cast<thread_data*>(y)->mmap_size_rx;
+  unsigned int size_tx=reinterpret_cast<thread_data*>(y)->mmap_size_tx;
+  unsigned int max_fr_rx=size_rx/2048;
+  unsigned int max_fr_tx=size_tx/2048;
+  cout << "Thread source " << source << endl;
+//if (source) sleep(360000);
+  pollfd pl,plwr;
+  pl.fd=fds[source];
+  plwr.fd=fds[source!=1];
+  pl.events=POLLIN|POLLRDNORM|POLLERR;
+  plwr.events=POLLOUT;
+  int offset=TPACKET_ALIGN(sizeof(tpacket2_hdr));
+//  receive and print packet
+  unsigned int circ_rx=0;
+  unsigned int circ_tx=0;
+  sockaddr_ll *addr;
+  bool oneframe=true;
+  int tosent=0;
+  long packets=0;
+  long sends=0;
+  for (;;) {
+    if (!oneframe) cout << "Did not get any frame" << endl;
+    pl.revents=0;
+    poll(&pl,1,-1);
+//  cout << "Have poll" << endl;
+    for (;;circ_rx=(circ_rx+1)%max_fr_rx,circ_tx=(circ_tx+1)%max_fr_tx) {
+      unsigned char *frame=mmaps_rx[source]+circ_rx*2048;
+      tpacket2_hdr *hdr=reinterpret_cast<tpacket2_hdr*>(frame);
+      if ((hdr->tp_status&TP_STATUS_USER)==TP_STATUS_USER) {
+//      if (hdr->tp_status&TP_STATUS_LOSING==TP_STATUS_LOSING) cout << "Losing packets" << endl;
+//      cout << "Have packet " << circ_rx << endl;
+//      cout << "From " << argv[source+1] << endl;
+//      print_hex(frame+hdr->tp_mac,hdr->tp_snaplen);
+        if (hdr->tp_snaplen!=hdr->tp_len) throw "truncation?";
+        addr=reinterpret_cast<sockaddr_ll*>(frame+TPACKET_ALIGN(sizeof(tpacket2_hdr)));
+        if (hdr->tp_snaplen>1514) { // 1500 + MAC + MAC + ethtype
+          cout << hdr->tp_snaplen << endl;
+          throw "Packet bigger than 1500 bytes";
+          }
+        if (addr->sll_pkttype==PACKET_OUTGOING) {
+          hdr->tp_status=TP_STATUS_KERNEL;
+          continue;
+          }
+        unsigned char *dst_frame=mmaps_tx[source!=1]+circ_tx*2048;
+        tpacket2_hdr *dst_hdr=reinterpret_cast<tpacket2_hdr*>(dst_frame);
+        for (int kk=0;;++kk) {
+          if ((dst_hdr->tp_status&0b111)!=TP_STATUS_AVAILABLE) {
+            if (kk>20) {
+              cout << circ_tx << "x: " << hex << dst_hdr->tp_status << dec << endl;
+              throw "Dupa 15";
+              }
+            else {
+              cout << "Send buffer full " << kk << endl;
+//
+              if (tosent) {
+                ++sends;
+                x=send(fds[source!=1],NULL,0,0);
+                tosent=0;
+                if (x<0) {
+                  if (errno==EAGAIN) continue;
+                  perror("send");
+                  cout << "From " << argv[source+1] << endl;
+                  cout << errno << endl;
+                  print_hex(buffer,x);
+                  throw "Dupa s";
+                  }
+                }
+//
+              poll(&plwr,1,-1);
+              cout << "Poll plwr revents: " << plwr.revents << endl;
+              }
+            }
+          else break;
+          }
+/*
+        if (packets%40000==0) {
+          if (source) cout << "\x1b[4B";
+          if (!source) cout << "\x1b[6B";
+          cout << source << "        " << packets << " " << sends << " " << packets*1.0/sends << "             \r" << flush;
+          if (source) cout << "\x1b[4F";
+          if (!source) cout << "\x1b[6F";
+          }  */
+        dst_hdr->tp_len=hdr->tp_len;
+        memcpy(dst_frame+offset,frame+hdr->tp_mac,hdr->tp_len);
+        dst_hdr->tp_status=TP_STATUS_SEND_REQUEST;
+        hdr->tp_status=TP_STATUS_KERNEL;
+        ++tosent;
+        ++packets;
+        if (tosent && tosent%128==0) {
+          ++delayed;
+          ++sends;
+          x=send(fds[source!=1],NULL,0,MSG_DONTWAIT);
+          tosent=0;
+          if (x<0) {
+            if (errno==EAGAIN) continue;
+            perror("send");
+            cout << "From " << argv[source+1] << endl;
+            cout << errno << endl;
+            print_hex(buffer,x);
+            throw "Dupa s";
+            }
+          }
+        }
+      else {
+        if (tosent) {
+          ++immediate;
+          ++sends;
+          x=send(fds[source!=1],NULL,0,MSG_DONTWAIT);
+          tosent=0;
+          if (x<0) {
+            if (errno!=EAGAIN) {
+              perror("send");
+              cout << "From " << argv[source+1] << endl;
+              cout << errno << endl;
+              print_hex(buffer,x);
+              throw "Dupa s";
+              }
+            }
+          }
+        break;
+        }
+      }
+    }
+  return 0;
+  }
+
+//  END OF   ******* THREAD FORWARDER *********************************
+
+bool checksum(unsigned char *etherpacket, size_t length, uint16_t *chk_found, uint16_t *chk_calc) {
+  bool test=true;
+//ios_base::fmtflags fl=cout.flags();
+  if (*reinterpret_cast<uint16_t*>(etherpacket+12)!=8) test=false;
+  if ((*(etherpacket+14)&0xf0)!=0x40) test=false;
+  int size=(*(etherpacket+14)&0x0f)*2;
+  unsigned int chksum=0;
+  for (int i=0;i<size;++i) {
+    uint16_t item=ntohs(*reinterpret_cast<uint16_t*>(etherpacket+14+i*2));
+    if (i==5) { // skip checksum
+      *chk_found=item;
+      continue;
+      }
+    chksum+=item;
+    chksum+=(chksum>>16);
+    chksum=chksum&0x0000ffff;
+    }
+  chksum=chksum^0x0000ffff;
+//cout.flags(fl);
+  *chk_calc=chksum;
+  return test;
+  }
+//********************************************
+void print_hex(unsigned char *data, int len) {
+  cout << hex << setfill('0');
+  cout << setw(3) << dec << 0 << hex << "  ";
+  for (int i=0;i<len;++i) {
+    cout << setw(2) << (int) data[i];
+    if ((i+1)%16==0) { 
+      cout << endl;
+      cout << setw(3) << dec << i/16 << hex << "  ";
+      }
+    else if ((i+1)%8==0) cout << " | ";
+    else cout << " ";
+    }
+  cout << dec << setfill(' ') << endl;
+  cout << "--" << endl;
+}
