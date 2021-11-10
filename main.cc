@@ -96,22 +96,21 @@ int main(int argc , char * argv[]) try {
 //! ret=setsockopt(fd[k],SOL_PACKET,PACKET_ADD_MEMBERSHIP,&mreq,sizeof(mreq));
 //! if (ret<0) throw string("setsockopt");
 //! cout << "Set " << argv[k+1] << " to PROMISCUOUS mode" << endl;
-/*
-    long mem=16777216;
+    long mem=ring_parameters_tx.tp_block_size*ring_parameters_tx.tp_block_nr/
+             ring_parameters_tx.tp_frame_size*1514;
     socklen_t lmem=sizeof(mem);
-    ret=setsockopt(fd[k],SOL_SOCKET,SO_RCVBUFFORCE,&mem,lmem);
+    ret=setsockopt(fd[k],SOL_SOCKET,SO_SNDBUFFORCE,&mem,lmem);
     if (ret<0) {
       perror("setsockopt");
       throw "Dupa 8";
       }
     mem=0;
-    ret=getsockopt(fd[k],SOL_SOCKET,SO_RCVBUF,&mem,&lmem);
+    ret=getsockopt(fd[k],SOL_SOCKET,SO_SNDBUF,&mem,&lmem);
     if (ret<0) {
       perror("getsockopt");
       throw "Dupa 9";
       }
-    cout << "Socket buffer: " << mem << " " << lmem << endl;
-*/
+    cout << "Send buffer set: " << mem << " " << lmem << endl;
     space_rx[k]=reinterpret_cast<unsigned char*>(mmap(NULL,
               ring_parameters_rx.tp_block_size*ring_parameters_rx.tp_block_nr+
               ring_parameters_tx.tp_block_size*ring_parameters_tx.tp_block_nr,
@@ -265,7 +264,6 @@ void * thread_forwarder(void * y) {
             cout << "Bytes left " << tosent_bytes << endl;
           if (x<0) {
             if (errno==EAGAIN) {
-              cout << "EAGAIN" << endl;
               continue;
               }
             perror("send");
@@ -295,6 +293,7 @@ void * thread_forwarder(void * y) {
               }
             else {
               cout << "EAGAIN" << endl;
+              throw "Dupa 53";
               }
             }
           }
