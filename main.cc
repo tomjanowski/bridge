@@ -98,7 +98,7 @@ int main(int argc , char * argv[]) try {
 //! if (ret<0) throw string("setsockopt");
 //! cout << "Set " << argv[k+1] << " to PROMISCUOUS mode" << endl;
     long mem=ring_parameters_tx.tp_block_size*ring_parameters_tx.tp_block_nr/
-             ring_parameters_tx.tp_frame_size*1514/4;
+             ring_parameters_tx.tp_frame_size*1514/10;
     mem=(mem+PAGE_SIZE)&(~PAGE_SIZE);
     mem=((mem<MEGABYTE)?MEGABYTE:mem);
     socklen_t lmem=sizeof(mem);
@@ -257,7 +257,7 @@ void * thread_forwarder(void * y) {
         ++tosent;
         tosent_bytes+=hdr->tp_len;
         ++packets;
-        if (tosent_bytes && tosent%128==0) {
+        if (tosent_bytes && tosent%16==0) {
           ++delayed;
           ++sends;
           x=send(fds[source!=1],NULL,0,MSG_DONTWAIT);
