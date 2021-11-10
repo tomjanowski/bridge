@@ -199,6 +199,7 @@ void * thread_forwarder(void * y) {
           }
         if (addr->sll_pkttype==PACKET_OUTGOING) {
           hdr->tp_status=TP_STATUS_KERNEL;
+          circ_tx=(circ_tx-1+max_fr_tx)%max_fr_tx;
           continue;
           }
         unsigned char *dst_frame=mmaps_tx[source!=1]+circ_tx*2048;
