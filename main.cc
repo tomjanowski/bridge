@@ -176,11 +176,16 @@ void * thread_forwarder(void * y) {
   sockaddr_ll *addr;
   bool oneframe=true;
   int tosent=0;
+  unsigned long tosent_bytes=0;
   long packets=0;
   long sends=0;
   for (;;) {
     if (!oneframe) cout << "Did not get any frame" << endl;
     pl.revents=0;
+    if (tosent_bytes) {
+      cout << "Error, entering read wait while writes are not finished" << endl;
+      throw "Dupa 33";
+      }
     poll(&pl,1,-1);
 //  cout << "Have poll" << endl;
     for (;;circ_rx=(circ_rx+1)%max_fr_rx,circ_tx=(circ_tx+1)%max_fr_tx) {
@@ -211,14 +216,16 @@ void * thread_forwarder(void * y) {
               throw "Dupa 15";
               }
             else {
-              cout << "Send buffer full " << kk << endl;
+              cout << "TX RING buffer full " << kk << endl;
 //
               if (tosent) {
                 ++sends;
                 x=send(fds[source!=1],NULL,0,0);
                 tosent=0;
+                if (x>0) tosent_bytes-=x;
+                if (tosent_bytes)
+                  cout << "Bytes left " << tosent_bytes << endl;
                 if (x<0) {
-                  if (errno==EAGAIN) continue;
                   perror("send");
                   cout << "From " << argv[source+1] << endl;
                   cout << errno << endl;
@@ -246,14 +253,21 @@ void * thread_forwarder(void * y) {
         dst_hdr->tp_status=TP_STATUS_SEND_REQUEST;
         hdr->tp_status=TP_STATUS_KERNEL;
         ++tosent;
+        tosent_bytes+=hdr->tp_len;
         ++packets;
         if (tosent && tosent%128==0) {
           ++delayed;
           ++sends;
           x=send(fds[source!=1],NULL,0,MSG_DONTWAIT);
           tosent=0;
+          if (x>0) tosent_bytes-=x;
+          if (tosent_bytes)
+            cout << "Bytes left " << tosent_bytes << endl;
           if (x<0) {
-            if (errno==EAGAIN) continue;
+            if (errno==EAGAIN) {
+              cout << "EAGAIN" << endl;
+              continue;
+              }
             perror("send");
             cout << "From " << argv[source+1] << endl;
             cout << errno << endl;
@@ -268,6 +282,9 @@ void * thread_forwarder(void * y) {
           ++sends;
           x=send(fds[source!=1],NULL,0,MSG_DONTWAIT);
           tosent=0;
+          if (x>0) tosent_bytes-=x;
+          if (tosent_bytes)
+            cout << "Bytes left " << tosent_bytes << endl;
           if (x<0) {
             if (errno!=EAGAIN) {
               perror("send");
@@ -275,6 +292,9 @@ void * thread_forwarder(void * y) {
               cout << errno << endl;
               print_hex(buffer,x);
               throw "Dupa s";
+              }
+            else {
+              cout << "EAGAIN" << endl;
               }
             }
           }
