@@ -29,6 +29,7 @@ unsigned char ** mmaps_tx;
 unsigned int mmap_size_rx;
 unsigned int mmap_size_tx;
 };
+const int MEGABYTE=1024*1024;
 //  ************************** MAIN ****************************
 
 int main(int argc , char * argv[]) try {
@@ -97,7 +98,9 @@ int main(int argc , char * argv[]) try {
 //! if (ret<0) throw string("setsockopt");
 //! cout << "Set " << argv[k+1] << " to PROMISCUOUS mode" << endl;
     long mem=ring_parameters_tx.tp_block_size*ring_parameters_tx.tp_block_nr/
-             ring_parameters_tx.tp_frame_size*1514;
+             ring_parameters_tx.tp_frame_size*1514/4;
+    mem=(mem+PAGE_SIZE)&(~PAGE_SIZE);
+    mem=((mem<MEGABYTE)?MEGABYTE:mem);
     socklen_t lmem=sizeof(mem);
     ret=setsockopt(fd[k],SOL_SOCKET,SO_SNDBUFFORCE,&mem,lmem);
     if (ret<0) {
