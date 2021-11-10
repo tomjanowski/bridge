@@ -150,7 +150,7 @@ struct thread_data thr_dat[2];
 //  **************** THREAD FORWARDER *********************************
 
 
-void * thread_forwarder(void * y) {
+void * thread_forwarder(void * y) try {
   sockaddr_ll sckbind;
   socklen_t socklen;
   ssize_t x;
@@ -306,6 +306,9 @@ void * thread_forwarder(void * y) {
       }
     }
   return 0;
+  } catch (const char * x) {
+  cout << "Error catched: \"" << x << "\"" <<  endl;
+  return (void*)-1;
   }
 
 //  END OF   ******* THREAD FORWARDER *********************************
