@@ -226,8 +226,8 @@ void * thread_forwarder(void * y) try {
                 x=send(fds[source!=1],NULL,0,0);
                 tosent=0;
                 if (x>0) tosent_bytes-=x;
-                if (tosent_bytes)
-                  cout << "Bytes left " << tosent_bytes << endl;
+//              if (tosent_bytes)
+//                cout << "Bytes left " << tosent_bytes << endl;
                 if (x<0) {
                   perror("send");
                   cout << "From " << argv[source+1] << endl;
@@ -264,8 +264,8 @@ void * thread_forwarder(void * y) try {
           x=send(fds[source!=1],NULL,0,MSG_DONTWAIT);
           tosent=0;
           if (x>0) tosent_bytes-=x;
-          if (tosent_bytes)
-            cout << "Bytes left " << tosent_bytes << endl;
+//        if (tosent_bytes)
+//          cout << "Bytes left " << tosent_bytes << endl;
           if (x<0) {
             if (errno==EAGAIN) {
               continue;
@@ -285,8 +285,8 @@ void * thread_forwarder(void * y) try {
           x=send(fds[source!=1],NULL,0,0);
           tosent=0;
           if (x>0) tosent_bytes-=x;
-          if (tosent_bytes)
-            cout << "Bytes left " << tosent_bytes << endl;
+//        if (tosent_bytes)
+//          cout << "Bytes left " << tosent_bytes << endl;
           if (x<0) {
             if (errno!=EAGAIN) {
               perror("send");
@@ -308,6 +308,7 @@ void * thread_forwarder(void * y) try {
   return 0;
   } catch (const char * x) {
   cout << "Error catched: \"" << x << "\"" <<  endl;
+  exit(1);
   return (void*)-1;
   }
 
