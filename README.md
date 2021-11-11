@@ -8,7 +8,7 @@ via /proc interface). Therefore this program works more like a wire that is plug
 
 The invocation is as follows:
 
-> ./bridge interface1 interace2
+`./bridge interface1 interace2`
 
 It requires elevated priviledges to succeed.
 
@@ -29,13 +29,13 @@ The program will need the following:
 
 The virtual network device inside of a VM should be tuned:
 
-> ethtool -K interfaceX tx off
+`ethtool -K interfaceX tx off`
 
 to force the VM to fill in correct checksums for all the relevant protocols
 
 The wireless interface should be prepared like this:
 
-> ethtool -K wlp2s0 gro off
+`ethtool -K wlp2s0 gro off`
 
 So that raw frames are as big as the ones received at the interface level (usually below 1500 bytes each). Otherwise TCP offloding might
 combine a few frames to produce one big TCP segment.
