@@ -214,7 +214,7 @@ void * thread_forwarder(void * y) try {
         tpacket2_hdr *dst_hdr=reinterpret_cast<tpacket2_hdr*>(dst_frame);
         for (int kk=0;;++kk) {
           if ((dst_hdr->tp_status&0b111)!=TP_STATUS_AVAILABLE) {
-            if (kk>20) {
+            if (kk>10000) {
               cout << circ_tx << "x: " << hex << dst_hdr->tp_status << dec << endl;
               throw "Dupa 15";
               }
@@ -233,7 +233,11 @@ void * thread_forwarder(void * y) try {
                   cout << "From " << argv[source+1] << endl;
                   cout << errno << endl;
                   print_hex(buffer,x);
-                  throw "Dupa s";
+                  if (errno==ENETDOWN) {
+                    sleep(1);
+                    continue;
+                    }
+                  throw "Dupa s1";
                   }
                 }
 //
@@ -274,11 +278,16 @@ void * thread_forwarder(void * y) try {
             cout << "From " << argv[source+1] << endl;
             cout << errno << endl;
             print_hex(buffer,x);
-            throw "Dupa s";
+            if (errno==ENETDOWN) {
+              sleep(1);
+              continue;
+              }
+            throw "Dupa s2";
             }
           }
         }
       else {
+netdown:
         if (tosent_bytes) {
           ++immediate;
           ++sends;
@@ -293,7 +302,12 @@ void * thread_forwarder(void * y) try {
               cout << "From " << argv[source+1] << endl;
               cout << errno << endl;
               print_hex(buffer,x);
-              throw "Dupa s";
+              if (errno==ENETDOWN) {
+                sleep(2);
+                cout << "Waiting for network to be up in nonblocking send()" << endl;
+                goto netdown;
+                }
+              throw "Dupa s3";
               }
             else {
               cout << "EAGAIN" << endl;
