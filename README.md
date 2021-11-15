@@ -1,4 +1,4 @@
-# User space bridge (or maybe a wire)
+# User space WiFi bridge for Linux (or maybe a WiFi *wire*)
 
 This short project's goal was to create a simple program for forwarding traffic between two
 interfaces, in a similar fashion as you would expect from a Linux bridge implementation. The difference
@@ -8,9 +8,9 @@ via /proc interface). Therefore this program works more like a wire that is plug
 
 The invocation is as follows:
 
-`./bridge interface1 interace2`
+`./bridge interface1 interface2`
 
-It requires elevated priviledges to succeed.
+It requires elevated privileges to succeed.
 
 The reason I needed this program was to connect a TAP device used by a virtual machine with a wireless interface
 on a laptop. Wireless interfaces are notorious for not working well in bridges, mostly due to a constraint that
@@ -20,7 +20,7 @@ to couple such a VM communicating from a tap device with a wireless interface. T
 addresses, it just simply shuffles traffic both ways.
 
 Bridges would complain about existence of more than one device with the same MAC. Also, in many cases it is not even possible to add
-a wifi card to a bridge on Linux. It is possible in so called "4 address mode" but then most AP will not accept this traffic.
+a WiFi card to a bridge on Linux. It is possible in so called "4 address mode" but then most AP will not accept this traffic.
 
 This program uses Linux TX and RX RING implementation and raw Ethernet frames. It works pretty fast with negligible packet drops.
 It will perform well on interfaces below 1 Gbit/s. I could not go beyond 5 Gbit/s on veth tests.
@@ -29,7 +29,7 @@ The program will need the following:
 
 The virtual network device inside of a VM should be tuned:
 
-`ethtool -K interfaceX tx off`
+`ethtool -K interface tx off`
 
 to force the VM to fill in correct checksums for all the relevant protocols
 
@@ -37,5 +37,5 @@ The wireless interface should be prepared like this:
 
 `ethtool -K wlp2s0 gro off`
 
-So that raw frames are as big as the ones received at the interface level (usually below 1500 bytes each). Otherwise TCP offloding might
+So that raw frames are as big as the ones received at the interface level (usually below 1500 bytes each). Otherwise TCP offloading might
 combine a few frames to produce one big TCP segment.
