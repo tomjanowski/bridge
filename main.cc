@@ -182,14 +182,18 @@ void * thread_forwarder(void * y) try {
   unsigned long tosent_bytes=0;
   long packets=0;
   long sends=0;
+  bool net_was_down=false;
   for (;;) {
     if (!oneframe) cout << "Did not get any frame" << endl;
     pl.revents=0;
     if (tosent_bytes) {
       cout << "Error, entering read wait while writes are not finished" << endl;
+      cout << "tosent_bytes: " << tosent_bytes << endl;
+      cout << "net was down? " << net_was_down << endl;
       throw "Dupa 33";
       }
     poll(&pl,1,-1);
+    net_was_down=false;
 //  cout << "Have poll" << endl;
     for (;;circ_rx=(circ_rx+1)%max_fr_rx,circ_tx=(circ_tx+1)%max_fr_tx) {
       unsigned char *frame=mmaps_rx[source]+circ_rx*2048;
@@ -234,6 +238,7 @@ void * thread_forwarder(void * y) try {
                   cout << errno << endl;
                   print_hex(buffer,x);
                   if (errno==ENETDOWN) {
+                    net_was_down=true;
                     sleep(1);
                     continue;
                     }
@@ -279,6 +284,7 @@ void * thread_forwarder(void * y) try {
             cout << errno << endl;
             print_hex(buffer,x);
             if (errno==ENETDOWN) {
+              net_was_down=true;
               sleep(1);
               continue;
               }
@@ -296,6 +302,12 @@ netdown:
           if (x>0) tosent_bytes-=x;
 //        if (tosent_bytes)
 //          cout << "Bytes left " << tosent_bytes << endl;
+          if (tosent_bytes>0) {
+            time_t x=time(NULL);
+            cout << "Blocking send did not clear all the data, sleep 1 s. " << ctime(&x);
+            sleep(1);
+            goto netdown;
+            }
           if (x<0) {
             if (errno!=EAGAIN) {
               perror("send");
@@ -304,6 +316,7 @@ netdown:
               print_hex(buffer,x);
               if (errno==ENETDOWN) {
                 sleep(2);
+                net_was_down=true;
                 cout << "Waiting for network to be up in nonblocking send()" << endl;
                 goto netdown;
                 }
