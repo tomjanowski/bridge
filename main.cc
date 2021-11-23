@@ -302,9 +302,11 @@ netdown:
           if (x>0) tosent_bytes-=x;
 //        if (tosent_bytes)
 //          cout << "Bytes left " << tosent_bytes << endl;
-          if (tosent_bytes>0) {
-            time_t x=time(NULL);
-            cout << "Blocking send did not clear all the data, sleep 1 s. " << ctime(&x);
+          if (x>=0 && tosent_bytes>0) {
+            perror("send");
+            time_t xx=time(NULL);
+            cout << x << endl;
+            cout << "Blocking send did not clear all the data, sleep 1 s. " << ctime(&xx);
             sleep(1);
             goto netdown;
             }
