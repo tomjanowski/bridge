@@ -302,7 +302,7 @@ netdown:
           if (x>0) tosent_bytes-=x;
 //        if (tosent_bytes)
 //          cout << "Bytes left " << tosent_bytes << endl;
-          if (x>=0 && tosent_bytes>0) {
+          if (tosent_bytes>0 && x>=0) {
             perror("send");
             time_t xx=time(NULL);
             cout << x << endl;
