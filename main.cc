@@ -305,7 +305,7 @@ netdown:
           if (tosent_bytes>0 && x>=0) {
             perror("send");
             time_t xx=time(NULL);
-            cout << x << endl;
+            cout << x << " " << tosent_bytes << endl;
             cout << "Blocking send did not clear all the data, sleep 1 s. " << ctime(&xx);
             sleep(1);
             goto netdown;
