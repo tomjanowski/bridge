@@ -101,7 +101,7 @@ int main(int argc , char * argv[]) try {
              ring_parameters_tx.tp_frame_size*1514/10;
     mem=((mem+PAGE_SIZE-1)&(~(PAGE_SIZE-1)));
     mem=((mem<MEGABYTE)?MEGABYTE:mem);
-    cout << "Initial send buffer requested " << mem << endl;
+    cout << __LINE__ << ": Initial send buffer requested " << mem << endl;
     socklen_t lmem=sizeof(mem);
     ret=setsockopt(fd[k],SOL_SOCKET,SO_SNDBUFFORCE,&mem,lmem);
     if (ret<0) {
@@ -225,7 +225,7 @@ void * thread_forwarder(void * y) try {
             else {
               cout << "TX RING buffer full " << kk << endl;
 //
-              if (tosent) {
+              if (tosent_bytes) {
                 ++sends;
                 x=send(fds[source!=1],NULL,0,0);
                 tosent=0;
@@ -240,6 +240,7 @@ void * thread_forwarder(void * y) try {
                   if (errno==ENETDOWN) {
                     net_was_down=true;
                     sleep(1);
+                    cout << "Line " << __LINE__ << endl;
                     continue;
                     }
                   throw "Dupa s1";
@@ -277,6 +278,7 @@ void * thread_forwarder(void * y) try {
 //          cout << "Bytes left " << tosent_bytes << endl;
           if (x<0) {
             if (errno==EAGAIN) {
+              cout << "Line " << __LINE__ << endl;
               continue;
               }
             perror("send");
@@ -286,6 +288,7 @@ void * thread_forwarder(void * y) try {
             if (errno==ENETDOWN) {
               net_was_down=true;
               sleep(1);
+              cout << "Line " << __LINE__ << endl;
               continue;
               }
             throw "Dupa s2";
